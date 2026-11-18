@@ -10,7 +10,7 @@ function VisitorForm() {
     e.preventDefault();
     try {
       // 백엔드(5000번 포트)로 데이터 쏘기!
-      const response = await fetch('http://localhost:5000/api/visits', {
+      const response = await fetch('https://school-visitor-api-jundenver.onrender.com/api/visits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
