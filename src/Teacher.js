@@ -23,7 +23,7 @@ function Teacher() {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/visits');
+      const response = await fetch('https://school-visitor-api-jundenver.onrender.com/api/visits');
       const data = await response.json();
       setRequests(data);
     } catch (error) {
@@ -34,7 +34,7 @@ function Teacher() {
   const handleStatusChange = async (id, newStatus) => {
     if(!window.confirm(`이 방문 건을 '${newStatus}' 처리하시겠습니까?`)) return;
 
-    await fetch(`http://localhost:5000/api/visits/${id}/status`, {
+    await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus })
