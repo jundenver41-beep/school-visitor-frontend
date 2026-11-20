@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 
 function VisitorForm() {
   // 1~3학년 1~6반 리스트 자동 생성
@@ -16,7 +15,7 @@ function VisitorForm() {
     visitDateTime: '',
     visitorName: '',
     relationship: '학부모',
-    contact: '', // 캡처엔 없지만 꼭 필요한 항목이라 추가했습니다
+    contact: '', 
     purpose: '학생 상담',
     details: '',
     agreePrivacy: false,
@@ -49,21 +48,32 @@ function VisitorForm() {
     };
 
     try {
-      // ⚠️ 주의: 아래 주소가 선생님의 Render 백엔드 주소가 맞는지 확인하세요!
-      await axios.post('https://school-visitor-api-jundenver.onrender.com/api/visits', submitData);
-      alert('학교 방문 신청이 성공적으로 완료되었습니다.');
-      
-      // 제출 후 폼 초기화
-      setFormData({
-        targetTeacher: targetTeachers[0],
-        visitDateTime: '',
-        visitorName: '',
-        relationship: '학부모',
-        contact: '',
-        purpose: '학생 상담',
-        details: '',
-        agreePrivacy: false,
+      // axios 대신 기본 내장된 fetch를 사용합니다!
+      const response = await fetch('https://school-visitor-api-jundenver.onrender.com/api/visits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submitData),
       });
+
+      if (response.ok) {
+        alert('학교 방문 신청이 성공적으로 완료되었습니다.');
+        
+        // 제출 후 폼 초기화
+        setFormData({
+          targetTeacher: targetTeachers[0],
+          visitDateTime: '',
+          visitorName: '',
+          relationship: '학부모',
+          contact: '',
+          purpose: '학생 상담',
+          details: '',
+          agreePrivacy: false,
+        });
+      } else {
+        throw new Error('서버 응답 오류');
+      }
     } catch (error) {
       console.error(error);
       alert('신청 중 오류가 발생했습니다. 다시 시도해 주세요.');
