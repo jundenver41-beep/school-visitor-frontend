@@ -37,18 +37,17 @@ function VisitorForm() {
       return;
     }
 
-    // 💡 백엔드 DB를 고치지 않기 위해 기존 4개 항목으로 예쁘게 포장해서 보냅니다.
+    // 💡 [수정된 부분] 백엔드가 원래 알고 있던 이름표(visitorName, phone, visitDate)로 맞춰줍니다!
     const submitData = {
-      name: `${formData.visitorName} (${formData.relationship})`,
-      contact: formData.contact,
-      date: formData.visitDateTime,
+      visitorName: `${formData.visitorName} (${formData.relationship})`,
+      phone: formData.contact,
+      visitDate: formData.visitDateTime,
       purpose: `[${formData.targetTeacher}] ${formData.purpose} ${
         formData.details ? ' - ' + formData.details : ''
       }`,
     };
 
     try {
-      // axios 대신 기본 내장된 fetch를 사용합니다!
       const response = await fetch('https://school-visitor-api-jundenver.onrender.com/api/visits', {
         method: 'POST',
         headers: {
