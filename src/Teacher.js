@@ -33,22 +33,27 @@ function Teacher() {
   const handleStatusChange = async (id, newStatus) => {
     if(!window.confirm(`이 방문 건을 '${newStatus}' 처리하시겠습니까?`)) return;
 
-    await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    });
-    fetchRequests();
+    // 화면에서 즉시 상태 반영
+    setRequests(prev => prev.map(req => req.id === id ? { ...req, status: newStatus } : req));
+
+    try {
+      await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (error) {
+      console.error('상태 변경 중 오류:', error);
+      fetchRequests();
+    }
   };
 
-  // ⭐ 삭제 전용 함수: 화면에서 즉시 제거(낙관적 업데이트) 후 서버에 반영
+  // ⭐ 삭제: 목록에서 완전히 지우지 않고 '삭제됨' 탭으로 이동
   const handleDelete = async (id) => {
-    if (!window.confirm('이 내역을 목록에서 삭제하시겠습니까?\n(데이터는 보관되지만 화면에서는 사라집니다.)')) return;
+    if (!window.confirm('이 내역을 "삭제됨" 탭으로 이동하시겠습니까?')) return;
 
-    // 1) 화면에서 즉시 제거 (사용자 입장에서는 바로 사라짐)
-    setRequests(prev => prev.filter(req => req.id !== id));
+    setRequests(prev => prev.map(req => req.id === id ? { ...req, status: '삭제됨' } : req));
 
-    // 2) 서버에 상태 변경 저장
     try {
       await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
         method: 'PATCH',
@@ -58,7 +63,25 @@ function Teacher() {
     } catch (error) {
       console.error('삭제 처리 중 오류:', error);
       alert('서버 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.');
-      fetchRequests(); // 오류 시 원래 목록 복구
+      fetchRequests();
+    }
+  };
+
+  // ⭐ 복구: 삭제됨 탭에서 다시 '방문완료' 상태로 되돌림
+  const handleRestore = async (id) => {
+    if (!window.confirm('이 내역을 "방문완료" 상태로 복구하시겠습니까?')) return;
+
+    setRequests(prev => prev.map(req => req.id === id ? { ...req, status: '방문완료' } : req));
+
+    try {
+      await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: '방문완료' })
+      });
+    } catch (error) {
+      console.error('복구 처리 중 오류:', error);
+      fetchRequests();
     }
   };
 
@@ -100,10 +123,9 @@ function Teacher() {
     document.body.removeChild(downloadLink);
   };
 
-  // ⭐ 삭제됨 상태는 항상 숨김 (전체 탭 포함)
+  // ⭐ 탭 필터링: '전체' 탭은 삭제됨 제외, '삭제됨' 탭은 삭제됨만 표시
   const filteredRequests = requests.filter(req => {
-    if (req.status === '삭제됨') return false;
-    if (filter === '전체') return true;
+    if (filter === '전체') return req.status !== '삭제됨';
     return req.status === filter;
   });
 
@@ -126,11 +148,15 @@ function Teacher() {
         </div>
         
         {/* 상단 버튼 영역 */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex gap-3">
-            {['대기중', '승인됨', '방문완료', '전체'].map((tab) => (
+        <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
+          <div className="flex gap-3 flex-wrap">
+            {['대기중', '승인됨', '방문완료', '삭제됨', '전체'].map((tab) => (
               <button key={tab} onClick={() => setFilter(tab)} 
-                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${filter === tab ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
+                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  filter === tab 
+                  ? (tab === '삭제됨' ? 'bg-slate-400 text-white shadow-md' : 'bg-slate-800 text-white shadow-md')
+                  : 'bg-white text-slate-500 hover:bg-slate-200 border border-slate-200'
+                }`}>
                 {tab}
               </button>
             ))}
@@ -144,16 +170,27 @@ function Teacher() {
         {/* 리스트 영역 */}
         <div className="space-y-4">
           {filteredRequests.map((req) => (
-            <div key={req.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-md transition-shadow relative">
+            <div key={req.id} className={`bg-white p-6 rounded-xl shadow-sm border flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-md transition-shadow relative ${req.status === '삭제됨' ? 'border-slate-200 opacity-70' : 'border-slate-200'}`}>
 
               {/* ⭐ 우측 상단 삭제 아이콘 버튼 (거절됨, 방문완료 상태일 때만 노출) */}
               {(req.status === '거절됨' || req.status === '방문완료') && (
                 <button
                   onClick={() => handleDelete(req.id)}
-                  title="목록에서 삭제"
+                  title="삭제됨 탭으로 이동"
                   className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors text-base"
                 >
                   🗑️
+                </button>
+              )}
+
+              {/* ⭐ 삭제됨 탭에서는 복구 버튼 노출 */}
+              {req.status === '삭제됨' && (
+                <button
+                  onClick={() => handleRestore(req.id)}
+                  title="복구하기"
+                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors text-base"
+                >
+                  ↩️
                 </button>
               )}
 
