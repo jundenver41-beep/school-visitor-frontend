@@ -31,11 +31,7 @@ function Teacher() {
   };
 
   const handleStatusChange = async (id, newStatus) => {
-    const confirmMsg = newStatus === '삭제됨' 
-      ? "이 내역을 목록에서 삭제하시겠습니까?\n(데이터는 보관되지만 화면에서는 사라집니다.)" 
-      : `이 방문 건을 '${newStatus}' 처리하시겠습니까?`;
-
-    if(!window.confirm(confirmMsg)) return;
+    if(!window.confirm(`이 방문 건을 '${newStatus}' 처리하시겠습니까?`)) return;
 
     await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
       method: 'PATCH',
@@ -43,6 +39,27 @@ function Teacher() {
       body: JSON.stringify({ status: newStatus })
     });
     fetchRequests();
+  };
+
+  // ⭐ 삭제 전용 함수: 화면에서 즉시 제거(낙관적 업데이트) 후 서버에 반영
+  const handleDelete = async (id) => {
+    if (!window.confirm('이 내역을 목록에서 삭제하시겠습니까?\n(데이터는 보관되지만 화면에서는 사라집니다.)')) return;
+
+    // 1) 화면에서 즉시 제거 (사용자 입장에서는 바로 사라짐)
+    setRequests(prev => prev.filter(req => req.id !== id));
+
+    // 2) 서버에 상태 변경 저장
+    try {
+      await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: '삭제됨' })
+      });
+    } catch (error) {
+      console.error('삭제 처리 중 오류:', error);
+      alert('서버 저장 중 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.');
+      fetchRequests(); // 오류 시 원래 목록 복구
+    }
   };
 
   const handleLogout = () => {
@@ -53,8 +70,6 @@ function Teacher() {
   };
 
   const downloadExcel = () => {
-    // 엑셀에서는 '삭제됨' 항목을 제외하고 출력하거나 포함할지 결정할 수 있습니다.
-    // 여기서는 화면과 동일하게 삭제되지 않은 항목만 출력하도록 했습니다.
     const excelData = requests
       .filter(req => req.status !== '삭제됨')
       .map((req) => ({
@@ -85,9 +100,9 @@ function Teacher() {
     document.body.removeChild(downloadLink);
   };
 
-  // ⭐ 필터링 로직 수정: '삭제됨' 상태인 항목은 무조건 숨깁니다.
+  // ⭐ 삭제됨 상태는 항상 숨김 (전체 탭 포함)
   const filteredRequests = requests.filter(req => {
-    if (req.status === '삭제됨') return false; 
+    if (req.status === '삭제됨') return false;
     if (filter === '전체') return true;
     return req.status === filter;
   });
@@ -129,11 +144,22 @@ function Teacher() {
         {/* 리스트 영역 */}
         <div className="space-y-4">
           {filteredRequests.map((req) => (
-            <div key={req.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-md transition-shadow">
+            <div key={req.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-md transition-shadow relative">
+
+              {/* ⭐ 우측 상단 삭제 아이콘 버튼 (거절됨, 방문완료 상태일 때만 노출) */}
+              {(req.status === '거절됨' || req.status === '방문완료') && (
+                <button
+                  onClick={() => handleDelete(req.id)}
+                  title="목록에서 삭제"
+                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors text-base"
+                >
+                  🗑️
+                </button>
+              )}
+
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h2 className="font-bold text-xl text-slate-900">{req.visitorName}</h2>
-                  {/* ⭐ 삭제됨 상태 뱃지 스타일 추가 */}
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                     req.status === '승인됨' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
                     req.status === '거절됨' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
@@ -163,15 +189,6 @@ function Teacher() {
                 {req.status === '승인됨' && (
                   <button onClick={() => handleStatusChange(req.id, '방문완료')} className="bg-emerald-500 text-white px-4 py-3 rounded-lg font-bold hover:bg-emerald-600 transition shadow-md flex items-center justify-center gap-2">✅ 체크인 처리</button>
                 )}
-                
-                {/* ⭐ 삭제 버튼 추가 (거절됨, 방문완료 상태일 때 표시) */}
-                {(req.status === '거절됨' || req.status === '방문완료') && (
-                  <button 
-                    onClick={() => handleStatusChange(req.id, '삭제됨')} 
-                    className="text-slate-400 hover:text-rose-500 text-xs font-medium mt-1 underline transition-colors">
-                    목록에서 삭제
-                  </button>
-                )}
               </div>
             </div>
           ))}
@@ -183,7 +200,7 @@ function Teacher() {
         </div>
       </div>
 
-      {/* QR 코드 모달창 (동일) */}
+      {/* QR 코드 모달창 */}
       {showQRModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
