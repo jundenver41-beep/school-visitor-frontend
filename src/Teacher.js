@@ -1,14 +1,13 @@
-// src/Teacher.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { QRCodeCanvas } from 'qrcode.react'; // ✅ QR코드 패키지 불러오기
+import { QRCodeCanvas } from 'qrcode.react';
 
 function Teacher() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState('대기중');
-  const [showQRModal, setShowQRModal] = useState(false); // ✅ QR 모달 상태
-  const qrRef = useRef(null); // ✅ QR 이미지 다운로드를 위한 참조
+  const [showQRModal, setShowQRModal] = useState(false);
+  const qrRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,7 +31,11 @@ function Teacher() {
   };
 
   const handleStatusChange = async (id, newStatus) => {
-    if(!window.confirm(`이 방문 건을 '${newStatus}' 처리하시겠습니까?`)) return;
+    const confirmMsg = newStatus === '삭제됨' 
+      ? "이 내역을 목록에서 삭제하시겠습니까?\n(데이터는 보관되지만 화면에서는 사라집니다.)" 
+      : `이 방문 건을 '${newStatus}' 처리하시겠습니까?`;
+
+    if(!window.confirm(confirmMsg)) return;
 
     await fetch(`https://school-visitor-api-jundenver.onrender.com/api/visits/${id}/status`, {
       method: 'PATCH',
@@ -50,15 +53,19 @@ function Teacher() {
   };
 
   const downloadExcel = () => {
-    const excelData = requests.map((req) => ({
-      '접수 번호': req.id,
-      '방문자 성함': req.visitorName,
-      '연락처': req.phone,
-      '방문 일시': new Date(req.visitDate).toLocaleString(),
-      '방문 목적': req.purpose,
-      '처리 상태': req.status,
-      '신청일': new Date(req.createdAt).toLocaleString()
-    }));
+    // 엑셀에서는 '삭제됨' 항목을 제외하고 출력하거나 포함할지 결정할 수 있습니다.
+    // 여기서는 화면과 동일하게 삭제되지 않은 항목만 출력하도록 했습니다.
+    const excelData = requests
+      .filter(req => req.status !== '삭제됨')
+      .map((req) => ({
+        '접수 번호': req.id,
+        '방문자 성함': req.visitorName,
+        '연락처': req.phone,
+        '방문 일시': new Date(req.visitDate).toLocaleString(),
+        '방문 목적': req.purpose,
+        '처리 상태': req.status,
+        '신청일': new Date(req.createdAt).toLocaleString()
+      }));
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     worksheet['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 40 }, { wch: 15 }, { wch: 25 }];
     const workbook = XLSX.utils.book_new();
@@ -67,7 +74,6 @@ function Teacher() {
     XLSX.writeFile(workbook, `방문기록_${today}.xlsx`);
   };
 
-  // ✅ QR코드 이미지로 다운로드하는 함수
   const downloadQRCode = () => {
     const canvas = qrRef.current.querySelector('canvas');
     const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
@@ -79,12 +85,13 @@ function Teacher() {
     document.body.removeChild(downloadLink);
   };
 
+  // ⭐ 필터링 로직 수정: '삭제됨' 상태인 항목은 무조건 숨깁니다.
   const filteredRequests = requests.filter(req => {
+    if (req.status === '삭제됨') return false; 
     if (filter === '전체') return true;
     return req.status === filter;
   });
 
-  // ✅ 학부모가 접속할 신청 폼 주소 (현재 창의 기본 도메인)
   const applicationUrl = window.location.origin;
 
   return (
@@ -97,62 +104,41 @@ function Teacher() {
             <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">방문 관리 대시보드</h1>
             <p className="text-sm text-slate-500 mt-2">가락중학교 외부인 출입 통제 시스템</p>
           </div>
-          
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">
-              JS
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="text-sm font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200 px-4 py-2 rounded-lg transition duration-200">
-              로그아웃
-            </button>
+            <div className="h-10 w-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">JS</div>
+            <button onClick={handleLogout} className="text-sm font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200 px-4 py-2 rounded-lg transition duration-200">로그아웃</button>
           </div>
         </div>
         
-        {/* 상단 버튼 영역 (탭 + 액션버튼) */}
+        {/* 상단 버튼 영역 */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex gap-3">
             {['대기중', '승인됨', '방문완료', '전체'].map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => setFilter(tab)} 
-                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                  filter === tab 
-                  ? 'bg-slate-800 text-white shadow-md' 
-                  : 'bg-white text-slate-500 hover:bg-slate-200 border border-slate-200'
-                }`}>
+              <button key={tab} onClick={() => setFilter(tab)} 
+                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${filter === tab ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-200 border border-slate-200'}`}>
                 {tab}
               </button>
             ))}
           </div>
-
           <div className="flex gap-2">
-            {/* ✅ QR 생성 버튼 추가 */}
-            <button 
-              onClick={() => setShowQRModal(true)}
-              className="flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-200 px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-100 transition shadow-sm text-sm">
-              📱 QR코드 생성
-            </button>
-            <button 
-              onClick={downloadExcel}
-              className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-100 transition shadow-sm text-sm">
-              📊 엑셀 다운로드
-            </button>
+            <button onClick={() => setShowQRModal(true)} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 border border-indigo-200 px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-100 transition shadow-sm text-sm">📱 QR코드 생성</button>
+            <button onClick={downloadExcel} className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-100 transition shadow-sm text-sm">📊 엑셀 다운로드</button>
           </div>
         </div>
 
-        {/* 리스트 영역 (생략 없이 원본 유지) */}
+        {/* 리스트 영역 */}
         <div className="space-y-4">
           {filteredRequests.map((req) => (
             <div key={req.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-6 hover:shadow-md transition-shadow">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h2 className="font-bold text-xl text-slate-900">{req.visitorName}</h2>
+                  {/* ⭐ 삭제됨 상태 뱃지 스타일 추가 */}
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                     req.status === '승인됨' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
                     req.status === '거절됨' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
                     req.status === '방문완료' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                    req.status === '삭제됨' ? 'bg-slate-100 text-slate-400 border border-slate-200' :
                     'bg-amber-100 text-amber-700 border border-amber-200'
                   }`}>
                     {req.status}
@@ -175,8 +161,15 @@ function Teacher() {
                   </>
                 )}
                 {req.status === '승인됨' && (
-                  <button onClick={() => handleStatusChange(req.id, '방문완료')} className="bg-emerald-500 text-white px-4 py-3 rounded-lg font-bold hover:bg-emerald-600 transition shadow-md flex items-center justify-center gap-2">
-                    ✅ 체크인 처리
+                  <button onClick={() => handleStatusChange(req.id, '방문완료')} className="bg-emerald-500 text-white px-4 py-3 rounded-lg font-bold hover:bg-emerald-600 transition shadow-md flex items-center justify-center gap-2">✅ 체크인 처리</button>
+                )}
+                
+                {/* ⭐ 삭제 버튼 추가 (거절됨, 방문완료 상태일 때 표시) */}
+                {(req.status === '거절됨' || req.status === '방문완료') && (
+                  <button 
+                    onClick={() => handleStatusChange(req.id, '삭제됨')} 
+                    className="text-slate-400 hover:text-rose-500 text-xs font-medium mt-1 underline transition-colors">
+                    목록에서 삭제
                   </button>
                 )}
               </div>
@@ -190,39 +183,19 @@ function Teacher() {
         </div>
       </div>
 
-      {/* ✅ QR 코드 모달창 */}
+      {/* QR 코드 모달창 (동일) */}
       {showQRModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">방문 신청 QR코드</h2>
             <p className="text-sm text-slate-500 mb-6">아래 이미지를 홈페이지에 게시하세요.</p>
-            
             <div className="flex justify-center mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100" ref={qrRef}>
-              <QRCodeCanvas 
-                value={applicationUrl} 
-                size={200}
-                bgColor={"#ffffff"}
-                fgColor={"#1e293b"}
-                level={"H"}
-                includeMargin={true}
-              />
+              <QRCodeCanvas value={applicationUrl} size={200} bgColor={"#ffffff"} fgColor={"#1e293b"} level={"H"} includeMargin={true}/>
             </div>
-            
-            <p className="text-xs text-slate-400 mb-6 break-all bg-slate-100 p-2 rounded">
-              연결 주소: {applicationUrl}
-            </p>
-
+            <p className="text-xs text-slate-400 mb-6 break-all bg-slate-100 p-2 rounded">연결 주소: {applicationUrl}</p>
             <div className="flex gap-2">
-              <button 
-                onClick={downloadQRCode}
-                className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">
-                이미지 다운로드
-              </button>
-              <button 
-                onClick={() => setShowQRModal(false)}
-                className="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-lg hover:bg-slate-300 transition">
-                닫기
-              </button>
+              <button onClick={downloadQRCode} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">이미지 다운로드</button>
+              <button onClick={() => setShowQRModal(false)} className="flex-1 bg-slate-200 text-slate-700 font-bold py-3 rounded-lg hover:bg-slate-300 transition">닫기</button>
             </div>
           </div>
         </div>
