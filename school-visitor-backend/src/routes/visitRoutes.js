@@ -57,5 +57,20 @@ router.patch('/:id/status', async (req, res) => {
     res.status(500).json({ message: '상태 변경 중 오류가 발생했습니다.' });
   }
 });
+// 4. 영구 삭제하기 (DELETE 방식)
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await VisitRequest.findByPk(id);
+    if (!request) {
+      return res.status(404).json({ message: '삭제할 데이터를 찾을 수 없습니다.' });
+    }
+    await request.destroy(); // DB에서 진짜로 삭제함
+    res.json({ message: '데이터가 영구 삭제되었습니다.' });
+  } catch (error) {
+    console.error('영구 삭제 에러:', error);
+    res.status(500).json({ message: '영구 삭제 중 오류가 발생했습니다.' });
+  }
+});
 
 module.exports = router;
